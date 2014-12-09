@@ -1,0 +1,426 @@
+#!/bin/bash
+
+# concerns:
+
+# modify all # change this tags
+# what is an empty question
+#The permissions of this directory and all files below should be world readable. Make sure your home directory has at least execute permission for all users. ???
+
+
+
+function init {
+	# change this : done
+	root=~/.question
+	# root=~/question
+	dirs=($root $root/questions $root/answers $root/votes)
+	for dir in "${dirs[@]}"
+	do
+		if ! [[ -d $dir ]]
+		then
+			mkdir -p $dir
+		fi
+	done
+}
+
+function create {
+	init
+	if [[ -z $2 ]]
+	then
+		echo Error: no question name given >&2
+		exit 1
+	else
+		if [[ $2 = */* ]] 
+		then
+			echo Error: invalid question name >&2
+			exit 1
+		fi
+	fi	
+	questionPath=$root/questions/$2
+	question=$3
+	# check for duplicate question name
+	if [[ -f $questionPath ]]
+	then
+		echo Error: duplicate question >&2
+		exit 1
+	fi
+	# if question is null, read from stdin
+	if [[ -z $question ]]
+	then
+		#question=$(< /dev/stdin)
+		echo Please enter your question:
+		read question
+	fi
+	# question content not null or contains "===="
+	if [[ $question != *[![:blank:]]* ]] || [[ $question = *====* ]]
+	then
+		echo Error: invalid question content >&2
+		exit 1
+	fi
+	echo "$question" > "$questionPath" 
+	exit 0
+}
+
+function answer {
+	init
+	if [[ -z $2 ]]
+	then
+		echo Error: no question id given >&2
+		exit 1
+	fi
+	if [[ -z $3 ]]
+	then
+		echo Error: no answer name given >&2
+		exit 1
+	else
+		if [[ $3 = */* ]] 
+		then
+			echo Error: invalid question name >&2
+			exit 1
+		fi
+	fi
+	# check question exists
+	existsQ=$(existsQuestion "$2")
+	if [[ $existsQ = "false" ]]
+	then
+		echo Error: no such question >&2
+		exit 1
+	fi
+	questionUser=$(echo "$2" | cut -d/ -f1)
+	questionName=$(echo "$2" | cut -d/ -f2)
+	answerDir=$root/answers/$questionUser/$questionName
+	name=$3
+	answerPath=$answerDir/$name
+	answer=$4
+	# check for duplicate answer name
+	if [[ -f $answerPath ]]
+	then
+		echo Error: duplicate answer >&2
+		exit 1
+	fi
+	# if answer is null, read from stdin
+	if [[ -z $answer ]]
+	then
+		echo Please enter your answer:
+		read answer
+	fi
+	# answer content not null or contains "===="
+	if [[ $answer != *[![:blank:]]* ]] || [[ $answer = *====* ]]
+	then
+		echo Error: invalid answer content >&2
+		exit 1
+	fi
+	if ! [[ -d $answerDir ]]
+	then
+		#echo $answerDir
+		mkdir -p "$answerDir"
+	fi
+	echo "$answer" > "$answerPath"
+	exit 0
+}
+
+function list {
+	init
+	if [[ -z $2 ]]
+	then
+		# change this : done
+		for username in $(cat /home/unixtool/data/question/users)
+		# for username in $(cat users)
+		do
+			echoUserQuestions $username
+		done
+	else
+		echoUserQuestions $2
+	fi
+	exit 0
+}
+
+function echoUserQuestions {
+	username=$1
+	#change this : done
+	questionDir=/home/$username/.question/questions
+	# questionDir=/Users/$username/question/questions
+	if [[ -d $questionDir ]]
+	then
+		#for file in $(find $questionDir -maxdepth 1 -type f | sed 's/[^ ]*\///g')
+		for file in $questionDir/*
+		do
+			if [[ -f $file ]]
+			then
+				#fileName=$(echo $file | sed 's/.*\/\([^\/]*\)$/\1/')
+				fileName=$(echo "$file" | sed 's/\/.*\///')
+				echo "$username/$fileName"
+			fi
+		done
+	fi
+}
+
+function vote {
+	init
+	if [[ $# -lt 3 ]]
+	then
+		echo Error: missing vote option >&2
+		exit 1
+	fi
+	if [[ $2 != "up" ]] && [[ $2 != "down" ]]
+	then
+		echo Error: wrong vote option >&2
+		exit 1
+	fi
+	# check question exists
+	existsQ=$(existsQuestion "$3")
+	if [[ $existsQ = "false" ]]
+	then
+		echo Error: no such question >&2
+		exit 1
+	fi
+	# check answer exists
+	if [[ -n $4 ]]
+	then
+		existsA=$(existsAnswer "$3" "$4")
+		if [[ $existsA = "false" ]]
+		then
+			echo Error: no such answer >&2
+			exit 1
+		fi
+	fi	
+	# create vote path
+	username=$(echo "$3" | cut -d/ -f1)
+	questionName=$(echo "$3" | cut -d/ -f2)
+	votePath=$root/votes/$username/$questionName
+	if ! [[ -d $root/votes/$username ]]
+	then
+		mkdir $root/votes/$username
+	fi	
+	if [[ -z $4 ]]
+	then
+		# vote for question
+		echo "$2" >> $votePath
+		# if ! [[ $(grep "^$2$" $votePath | wc -l) -gt 0 ]]
+		# then
+		# 	echo $2 >> $votePath
+		# fi
+	else		
+		# vote for answer
+		vote="$2 $4" 
+		echo "$vote" >> "$votePath"
+		# if ! [[ $(grep "^$vote$" $votePath | wc -l) -gt 0 ]]
+		# then
+		# 	echo $vote >> $votePath
+		# fi
+	fi
+	exit 0
+}
+
+function show {
+	init
+	if [[ $# -lt 2 ]]
+	then
+		echo Error: no question_id given >&2
+		exit 1
+	fi
+	# change this : done
+	users=$(cat /home/unixtool/data/question/users)
+	# users=$(cat users)
+	isFirstQuestion="true"	
+	shift 1
+	for question_id in "$@"
+	do
+		#echo $question_id
+		# check question exists
+		existsQ=$(existsQuestion "$question_id")
+		if [[ $existsQ = "false" ]]
+		then
+			echo Error: no such question >&2
+			exit 1
+		fi
+		if [[ $isFirstQuestion = "true" ]]
+		then 
+			isFirstQuestion="false"
+		else
+			echo ====
+		fi
+		showQuestion "$question_id"
+	done
+	exit 0
+}
+
+function showQuestion {
+	question_id=$1
+	questionUser=$(echo "$question_id" | cut -d/ -f1)
+	questionName=$(echo "$question_id" | cut -d/ -f2)
+	#change this : done
+	questionPath=/home/$questionUser/.question/questions/$questionName
+	# questionPath=/Users/$questionUser/question/questions/$questionName
+
+	printQuestion
+
+	# for username in "${users[@]}"
+	for username in $users
+	do
+		#change this : done
+		answerDir=/home/$username/.question/answers/$questionUser/$questionName
+		# answerDir=/Users/$username/question/answers/$questionUser/$questionName
+		#echo $answerDir
+		if [[ -d $answerDir ]]
+		then
+			#echo $answerDir
+			#for answerPath in $(find $answerDir -maxdepth 1 -type f)
+			for answerPath in "$answerDir"/*
+			do
+				#echo $answerPath
+				if [[ -f $answerPath ]]
+				then
+					printAnswer
+				fi
+			done
+		fi
+	done
+}
+
+function printAnswer {
+	#answerName=$(echo $answerPath | sed 's/[^ ]*\///g')
+	answerName=$(echo "$answerPath" | sed 's/\/.*\///')
+	answerId=$username/$answerName
+	answerScore=0
+	for username_l in $users
+	do
+		
+		#change this : done
+		votePath=/home/$username_l/.question/votes/$questionUser/$questionName
+		# votePath=/Users/$username/question/votes/$questionUser/$questionName
+		if [[ -f $votePath ]]
+		then
+			#vote=$(cat "$votePath" | awk -v answerId=$answerId 'BEGIN{ q=0 }
+			#	{
+			#		if( $0 == "up " answerId || $0 == "down " answerId)
+			#		{
+			#			if ( $1 == "up" ){
+			#				q = 1
+			#			}
+			#			if ( $1 == "down" ){
+			#				q = -1
+			#			}
+			#		}
+			#	}
+			#	END{ print q }')
+			vote=$(grep "${answerId}$" "$votePath" 2> /dev/null | tail -1 | cut -d" " -f1)
+			votescore=0
+			if [[ $vote = "up" ]]
+			then
+				votescore=1
+			fi
+			if [[ $vote = "down" ]]
+			then
+				votescore=-1
+			fi
+			answerScore=$(($answerScore + $votescore))
+		fi		
+	done
+	echo ====
+	echo $answerScore "$answerId"
+	# change this : done
+	cat "$answerPath" 2> /dev/null
+	# echo 
+}
+
+function printQuestion {
+	questionScore=0
+	for username in $users
+	do
+		#change this : done
+		votePath=/home/$username/.question/votes/$questionUser/$questionName
+		# votePath=/Users/$username/question/votes/$questionUser/$questionName
+		if [[ -f $votePath ]]
+		then
+			vote=$(egrep "^(up|down)$" "$votePath" 2> /dev/null | tail -1 | cut -d" " -f1)
+			votescore=0
+			if [[ $vote = "up" ]]
+			then
+				votescore=1
+			fi
+			if [[ $vote = "down" ]]
+			then
+				votescore=-1
+			fi
+			questionScore=$(($questionScore + $votescore))
+		fi		
+	done
+	echo $questionScore "$questionUser/$questionName"
+	# change this : done
+	cat "$questionPath" 2> /dev/null
+	# echo 
+}
+
+
+function existsQuestion {
+	username=$(echo "$1" | cut -d/ -f1)
+	questionName=$(echo "$1" | cut -d/ -f2)
+	#change this : done
+	questionPath=/home/$username/.question/questions/$questionName
+	# questionPath=/Users/$username/question/questions/$questionName
+	# check question exists
+	if ! [[ -f $questionPath ]]
+	then
+		echo "false"
+	else
+		echo "true"
+	fi
+}
+
+function existsAnswer {
+	questionUsername=$(echo "$1" | cut -d/ -f1)
+	questionName=$(echo "$1" | cut -d/ -f2)
+	answerUsername=$(echo "$2" | cut -d/ -f1)
+	answerName=$(echo "$2" | cut -d/ -f2)
+	#change this : done
+	answerPath=/home/$answerUsername/.question/answers/$questionUsername/$questionName/$answerName
+	# answerPath=/Users/$answerUsername/question/answers/$questionUsername/$questionName/$answerName
+	# check answer exists
+	if ! [[ -f $answerPath ]]
+	then
+		echo "false"
+	else
+		echo "true"
+	fi
+}
+
+function containsVote {
+	if [[ $(grep "^$1$" $2 | wc -l) -gt 0 ]]
+	then
+		echo "true"
+	else
+		echo "false"
+	fi
+}
+
+
+if [[ -z $1 ]]
+then
+	echo Error: No option is given >&2
+else
+	case $1 in 
+		create)
+			create "$@"
+			;;
+		answer)
+			answer "$@"
+			;;
+		list)
+			list "$@"
+			;;
+		vote)
+			vote "$@"
+			;;
+		show)
+			show "$@"
+			;;
+		# isDuplicateFile)
+		# 	isDuplicateFile "$@"
+		# 	;;
+		*)
+			echo Error: No such option exists >&2
+	esac
+fi
+
+
+
